@@ -1,9 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace wfm.geniali.lib.ShortItem
+namespace wfm.geniali.lib.Classes.ShortItem
 {
-    public partial class Item
+    public class ShortItemRoot
     {
         [JsonPropertyName("payload")]
         public Payload Payload
@@ -13,7 +13,7 @@ namespace wfm.geniali.lib.ShortItem
         }
     }
 
-    public partial class Payload
+    public class Payload
     {
         public Payload()
         {
@@ -21,16 +21,16 @@ namespace wfm.geniali.lib.ShortItem
         }
 
         [JsonPropertyName("items")]
-        public List<ItemElement> Items
+        public List<ShortItem> Items
         {
             get;
             set;
         }
     }
 
-    public partial class ItemElement
+    public class ShortItem
     {
-        public ItemElement()
+        public ShortItem()
         {
             
         }

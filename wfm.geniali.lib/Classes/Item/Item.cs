@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
-namespace wfm.geniali.lib
+namespace wfm.geniali.lib.Classes.Item
 {
-    public partial class Item
+    public class ItemRoot
     {
+        [JsonPropertyName("payload")]
         public Payload Payload
         {
             get;
@@ -12,23 +14,26 @@ namespace wfm.geniali.lib
         }
     }
 
-    public partial class Payload
+    public class Payload
     {
-        public ItemClass Item
+        [JsonPropertyName("item")]
+        public Item Item
         {
             get;
             set;
         }
     }
 
-    public partial class ItemClass
+    public class Item
     {
+        [JsonPropertyName("id")]
         public string Id
         {
             get;
             set;
         }
 
+        [JsonPropertyName("items_in_set")]
         public List<ItemsInSet> ItemsInSet
         {
             get;
@@ -36,110 +41,128 @@ namespace wfm.geniali.lib
         }
     }
 
-    public partial class ItemsInSet
+    public class ItemsInSet
     {
-        public De Ru
+        [JsonPropertyName("ru")]
+        public Translate Ru
         {
             get;
             set;
         }
 
-        public De Sv
+        [JsonPropertyName("sv")]
+        public Translate Sv
         {
             get;
             set;
         }
 
+        [JsonPropertyName("thumb")]
         public string Thumb
         {
             get;
             set;
         }
 
-        public De Zh
+        [JsonPropertyName("zh")]
+        public Translate Zh
         {
             get;
             set;
         }
 
-        public De Fr
+        [JsonPropertyName("fr")]
+        public Translate Fr
         {
             get;
             set;
         }
 
-        public De De
+        [JsonPropertyName("de")]
+        public Translate Translate
         {
             get;
             set;
         }
 
+        [JsonPropertyName("trading_tax")]
         public long? TradingTax
         {
             get;
             set;
         }
 
+        [JsonPropertyName("tags")]
         public List<string> Tags
         {
             get;
             set;
         }
 
-        public De Pt
+        [JsonPropertyName("pt")]
+        public Translate Pt
         {
             get;
             set;
         }
 
+        [JsonPropertyName("url_name")]
         public string UrlName
         {
             get;
             set;
         }
 
-        public De En
+        [JsonPropertyName("en")]
+        public Translate En
         {
             get;
             set;
         }
 
+        [JsonPropertyName("set_root")]
         public bool? SetRoot
         {
             get;
             set;
         }
 
+        [JsonPropertyName("ducats")]
         public long? Ducats
         {
             get;
             set;
         }
 
-        public De Ko
+        [JsonPropertyName("ko")]
+        public Translate Ko
         {
             get;
             set;
         }
 
+        [JsonPropertyName("icon_format")]
         public string IconFormat
         {
             get;
             set;
         }
 
+        [JsonPropertyName("icon")]
         public string Icon
         {
             get;
             set;
         }
 
+        [JsonPropertyName("id")]
         public string Id
         {
             get;
             set;
         }
 
+        [JsonPropertyName("sub_icon")]
         public string SubIcon
         {
             get;
@@ -147,26 +170,30 @@ namespace wfm.geniali.lib
         }
     }
 
-    public partial class De
+    public class Translate
     {
+        [JsonPropertyName("item_name")]
         public string ItemName
         {
             get;
             set;
         }
 
+        [JsonPropertyName("description")]
         public string Description
         {
             get;
             set;
         }
 
+        [JsonPropertyName("wiki_link")]
         public Uri WikiLink
         {
             get;
             set;
         }
 
+        [JsonPropertyName("drop")]
         public List<Drop> Drop
         {
             get;
@@ -174,19 +201,20 @@ namespace wfm.geniali.lib
         }
     }
 
-    public partial class Drop
+    public class Drop
     {
+        [JsonPropertyName("name")]
         public string Name
         {
             get;
             set;
         }
 
+        [JsonPropertyName("link")]
         public object Link
         {
             get;
             set;
         }
     }
-
 }
