@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 
+using wfm.geniali.lib.ShortItem;
 using wfm.geniali.rest;
-using wfm.geniali.rest.contracts;
 
 namespace wfm.geniali.cli
 {
@@ -10,17 +12,15 @@ namespace wfm.geniali.cli
     {
         public static void Main(string[] args)
         {
-            using(HttpClient httpClient = new HttpClient())
+            WfmClient         client     = new WfmClient();
+            List<ItemElement> shortItems = client.GetShortItemsAsync().Result.Payload.Items;
+
+            foreach(ItemElement shortItem in shortItems)
             {
-                WfmClient client = new WfmClient(httpClient);
-
-                SwaggerResponse<Items_payload> result = client.ItemsAsync().Result;
-
-                foreach(Short_item shortItem in result.Result.Payload.Items)
-                {
-                    Console.WriteLine(shortItem.ToString());
-                }
+                Console.WriteLine(shortItem.ItemName);
             }
+
+            Console.Read();
         }
     }
 }

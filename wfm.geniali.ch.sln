@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "wfm.geniali.desktop.app", "wfm.geniali.desktop.app\wfm.geniali.desktop.app.csproj", "{A5C14329-C0DE-45BF-93D3-37FC4AC19194}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "wfm.geniali.lib", "wfm.geniali.lib\wfm.geniali.lib.csproj", "{CE806AF2-9081-4E18-89AB-A6666E5EF815}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{A5C14329-C0DE-45BF-93D3-37FC4AC19194}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A5C14329-C0DE-45BF-93D3-37FC4AC19194}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A5C14329-C0DE-45BF-93D3-37FC4AC19194}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CE806AF2-9081-4E18-89AB-A6666E5EF815}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CE806AF2-9081-4E18-89AB-A6666E5EF815}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CE806AF2-9081-4E18-89AB-A6666E5EF815}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CE806AF2-9081-4E18-89AB-A6666E5EF815}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
