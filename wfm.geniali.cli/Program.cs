@@ -15,23 +15,24 @@ namespace wfm.geniali.cli
         public static void Main(string[] args)
         {
             WfmClient         client     = new WfmClient();
-            List<ShortItem> shortItems = client.GetShortItemsAsync().Result;
+            List<ShortItem> shortItems = client.GetShortItemsAsync().Result.Data;
 
             foreach(ShortItem shortItem in shortItems)
             {
-                if(shortItem.UrlName != null && shortItem.UrlName.EndsWith("prime_set"))
+                if(shortItem.UrlName != null && shortItem.UrlName.EndsWith("mesa_prime_set"))
                 {
-                    Item item = client.GetItemAsynx(shortItem.UrlName).Result;
+                    Result<Item> item = client.GetItemAsynx(shortItem.UrlName).Result;
 
-                    if(item != null)
+                    if(item.Successful)
                     {
+                        Console.WriteLine(item.Raw);
                        //Console.WriteLine($"id: {item.Id}\t {shortItem.ItemName}");
 
                        // if(item.ItemsInSet.Count > 0)
                        // {
                        //     foreach(ItemsInSet inSet in item.ItemsInSet)
                        //     {
-                               List<Order> orders = client.GetOrdersAsync(shortItem.UrlName).Result;
+                               List<Order> orders = client.GetOrdersAsync(shortItem.UrlName).Result.Data;
                                //Statistics statistics = client.GetStatisticsAsync(inSet.UrlName).Result;
 
                                Order bestSellOrder = orders.OrderByDescending(i => i.Platinum)
