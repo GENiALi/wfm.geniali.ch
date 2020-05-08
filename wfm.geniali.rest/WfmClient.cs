@@ -76,6 +76,9 @@ namespace wfm.geniali.rest
         private async Task<Result<T>> Execute<T>(RestRequest request)
             where T : new()
         {
+            request.AddHeader("language", "en");
+            request.AddHeader("platfrom", "pc");
+            
             IRestResponse<T> response = await _Client.ExecuteAsync<T>(request);
 
             if(response.ErrorException != null)

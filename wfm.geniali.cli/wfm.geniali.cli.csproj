@@ -9,4 +9,17 @@
       <ProjectReference Include="..\wfm.geniali.rest\wfm.geniali.rest.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="ConsoleTools" Version="0.5.4" />
+      <PackageReference Include="Microsoft.Extensions.Configuration" Version="3.1.3" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="3.1.3" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="3.1.3" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="3.1.3" />
+      <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="3.1.3" />
+      <PackageReference Include="Microsoft.Extensions.Hosting" Version="3.1.3" />
+      <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="3.1.3" />
+      <PackageReference Include="Serilog.AspNetCore" Version="3.2.0" />
+      <PackageReference Include="Serilog.Sinks.File" Version="4.1.0" />
+    </ItemGroup>
+
 </Project>
