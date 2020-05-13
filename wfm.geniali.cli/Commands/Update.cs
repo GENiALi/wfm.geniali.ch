@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using wfm.geniali.lib.Classes.Item;
@@ -26,6 +28,8 @@ namespace wfm.geniali.cli.Commands
                 sw.Write(res.Raw);
             }
             
+            Dictionary<string, ItemsInSet> itemsInSets = new Dictionary<string, ItemsInSet>();
+            
             foreach(ShortItem shortItem in res.Data)
             {
                 Result<Item> item = client.GetItemAsynx(shortItem.UrlName).Result;
@@ -37,6 +41,20 @@ namespace wfm.geniali.cli.Commands
                 {
                     sw.Write(item.Raw);
                 }
+                
+                foreach(ItemsInSet itemsInSet in item.Data.ItemsInSet)
+                {
+                    if(itemsInSets.ContainsKey(itemsInSet.Id) == false)
+                    {
+                        itemsInSets.Add(itemsInSet.Id, itemsInSet);
+                    }
+                }
+            }
+
+            FileInfo itemsInSetFi = new FileInfo($"cache/items.in.set.cache.json");
+            using(StreamWriter sw = new StreamWriter(itemsInSetFi.FullName))
+            {
+                sw.Write(JsonSerializer.Serialize(itemsInSets.Values.ToList()));
             }
         }
     }

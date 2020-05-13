@@ -80,6 +80,11 @@ namespace wfm.geniali.cli
                         new List().Execute(this, client);
 
                         break;
+                    case "continuously":
+                    case "c":
+                        new Continuously().Execute(this, client);
+
+                        break;
                     default:
                         continue;
                 }
@@ -93,6 +98,7 @@ namespace wfm.geniali.cli
             CWL("h | help \t für Hilfe");
             CWL("e | exit \t für beenden");
             CWL("l | list \t für Listenmodus");
+            CWL("c | continuously \t für permanente Updates");
         }
 
         private void PrintWelcome()

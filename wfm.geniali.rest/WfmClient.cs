@@ -55,12 +55,24 @@ namespace wfm.geniali.rest
 
         public async Task<Result<List<Order>>> GetOrdersAsync(string urlName)
         {
-            RestRequest request = new RestRequest("/items/{urlName}/orders");
-            request.AddParameter("urlName", urlName, ParameterType.UrlSegment);
+            Result<List<Order>> retValue = new Result<List<Order>>();
 
-            Result<OrderRoot> res = await Execute<OrderRoot>(request);
+            try
+            {
+                RestRequest request = new RestRequest("/items/{urlName}/orders");
+                request.AddParameter("urlName", urlName, ParameterType.UrlSegment);
 
-            return new Result<List<Order>>(res, res.Data.Payload.Orders);
+                Result<OrderRoot> res = await Execute<OrderRoot>(request);
+
+                return new Result<List<Order>>(res, res.Data.Payload.Orders);
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine(urlName);
+                Console.WriteLine(ex);
+            }
+
+            return retValue;
         }
 
         public async Task<Result<Statistics>> GetStatisticsAsync(string urlName)
