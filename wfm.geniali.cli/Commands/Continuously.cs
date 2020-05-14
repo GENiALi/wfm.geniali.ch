@@ -23,6 +23,7 @@ namespace wfm.geniali.cli.Commands
         private bool _Stop = false;
         private Timer _Timer = null;
         private Dictionary<string, List<Order>> _Orders = new Dictionary<string, List<Order>>();
+        private Dictionary<string, List<Order>> _FastDownloadOrders = new Dictionary<string, List<Order>>();
 
         public void Execute(Program main, WfmClient client)
         {
@@ -45,6 +46,10 @@ namespace wfm.geniali.cli.Commands
             Thread t = new Thread(() => InitLoadOrders(itemsInSet, main, client));
             t.IsBackground = true;
             t.Start();
+
+            Thread t2 = new Thread(() => InitLoadFastOrders(itemsInSet, main, client));
+            t2.IsBackground = true;
+            t2.Start();
 
             do
             {
@@ -91,12 +96,22 @@ namespace wfm.geniali.cli.Commands
         {
             foreach(ItemsInSet inSet in itemsInSet)
             {
+                if(_FastDownloadOrders.ContainsKey(inSet.UrlName))
+                {
+                    continue;
+                }
+
                 if(_Stop)
                 {
                     break;
                 }
 
-                Result<List<Order>> res = client.GetOrdersAsync(inSet.UrlName).Result;
+                Result<List<Order>> res = client.GetOrdersAsync(inSet.UrlName)?.Result;
+                
+                if(res == null)
+                {
+                    continue;
+                }
 
                 FileInfo orderFi = new FileInfo($"cache\\orders\\{inSet.UrlName}.item.cache.json");
 
@@ -120,6 +135,52 @@ namespace wfm.geniali.cli.Commands
             if(_Stop == false)
             {
                 InitLoadOrders(itemsInSet, main, client);
+            }
+        }
+
+        private void InitLoadFastOrders(List<ItemsInSet> itemsInSet, Program main, WfmClient client)
+        {
+            foreach(ItemsInSet inSet in itemsInSet)
+            {
+                if(_FastDownloadOrders.ContainsKey(inSet.UrlName) == false)
+                {
+                    continue;
+                }
+
+                if(_Stop)
+                {
+                    break;
+                }
+
+                Result<List<Order>> res = client.GetOrdersAsync(inSet.UrlName)?.Result;
+
+                if(res == null)
+                {
+                    continue;
+                }
+
+                FileInfo orderFi = new FileInfo($"cache\\orders\\{inSet.UrlName}.item.cache.json");
+
+                using(StreamWriter sw = new StreamWriter(orderFi.FullName))
+                {
+                    sw.Write(JsonSerializer.Serialize(res.Data));
+                }
+
+                if(_Orders.ContainsKey(inSet.UrlName))
+                {
+                    _Orders[inSet.UrlName] = res.Data;
+                }
+                else
+                {
+                    _Orders.Add(inSet.UrlName, res.Data);
+                }
+            }
+
+            Thread.Sleep(30000);
+
+            if(_Stop == false)
+            {
+                InitLoadFastOrders(itemsInSet, main, client);
             }
         }
 
@@ -165,6 +226,15 @@ namespace wfm.geniali.cli.Commands
                 dataGrid.Columns.Add("Name");
                 dataGrid.Columns.Add("URL Name");
                 dataGrid.Columns.Add("zu kaufen für");
+
+                _FastDownloadOrders.Clear();
+                foreach(KeyValuePair<string, Order> keyValuePair in bestSellOrders.OrderByDescending(i => i.Value.Platinum).Take(_Top * 2))
+                {
+                    _FastDownloadOrders.Add(keyValuePair.Key, new List<Order>()
+                                                              {
+                                                                  keyValuePair.Value
+                                                              });
+                }
 
                 foreach(KeyValuePair<string, Order> keyValuePair in bestSellOrders.OrderByDescending(i => i.Value.Platinum).Take(_Top))
                 {

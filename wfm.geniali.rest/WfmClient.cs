@@ -68,8 +68,7 @@ namespace wfm.geniali.rest
             }
             catch(Exception ex)
             {
-                Console.WriteLine(urlName);
-                Console.WriteLine(ex);
+                return null;
             }
 
             return retValue;
