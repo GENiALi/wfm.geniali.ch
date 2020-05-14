@@ -22,14 +22,16 @@ namespace wfm.geniali.cli.Commands
         private int _UpdateIntervall = 60;
         private bool _Stop = false;
         private Timer _Timer = null;
-        private Dictionary<string, List<Order>> _Orders = new Dictionary<string, List<Order>>();
-        private Dictionary<string, List<Order>> _FastDownloadOrders = new Dictionary<string, List<Order>>();
+        private Dictionary<ItemsInSet, List<Order>> _Orders = new Dictionary<ItemsInSet, List<Order>>();
+        private Dictionary<ItemsInSet, List<Order>> _FastDownloadOrders = new Dictionary<ItemsInSet, List<Order>>();
 
         public void Execute(Program main, WfmClient client)
         {
             string input = string.Empty;
             bool   exit  = false;
             main.CWL("Starte mit laden der Orders");
+
+            List<ItemsInSet> itemsInSet = LoadItemsInSet();
 
             if(Directory.Exists("cache\\orders") == false)
             {
@@ -38,10 +40,8 @@ namespace wfm.geniali.cli.Commands
 
             if(_Orders.Count == 0)
             {
-                _Orders = LoadOrders();
+                _Orders = LoadOrders(itemsInSet);
             }
-
-            List<ItemsInSet> itemsInSet = LoadItemsInSet();
 
             Thread t = new Thread(() => InitLoadOrders(itemsInSet, main, client));
             t.IsBackground = true;
@@ -61,7 +61,11 @@ namespace wfm.geniali.cli.Commands
                     case "back":
                         exit  = true;
                         _Stop = true;
-                        _Timer.Dispose();
+
+                        if(_Timer != null)
+                        {
+                            _Timer.Dispose();
+                        }
 
                         break;
                     case "help":
@@ -96,7 +100,7 @@ namespace wfm.geniali.cli.Commands
         {
             foreach(ItemsInSet inSet in itemsInSet)
             {
-                if(_FastDownloadOrders.ContainsKey(inSet.UrlName))
+                if(_FastDownloadOrders.ContainsKey(inSet))
                 {
                     continue;
                 }
@@ -107,7 +111,7 @@ namespace wfm.geniali.cli.Commands
                 }
 
                 Result<List<Order>> res = client.GetOrdersAsync(inSet.UrlName)?.Result;
-                
+
                 if(res == null)
                 {
                     continue;
@@ -120,13 +124,13 @@ namespace wfm.geniali.cli.Commands
                     sw.Write(JsonSerializer.Serialize(res.Data));
                 }
 
-                if(_Orders.ContainsKey(inSet.UrlName))
+                if(_Orders.ContainsKey(inSet))
                 {
-                    _Orders[inSet.UrlName] = res.Data;
+                    _Orders[inSet] = res.Data;
                 }
                 else
                 {
-                    _Orders.Add(inSet.UrlName, res.Data);
+                    _Orders.Add(inSet, res.Data);
                 }
             }
 
@@ -142,7 +146,7 @@ namespace wfm.geniali.cli.Commands
         {
             foreach(ItemsInSet inSet in itemsInSet)
             {
-                if(_FastDownloadOrders.ContainsKey(inSet.UrlName) == false)
+                if(_FastDownloadOrders.ContainsKey(inSet) == false)
                 {
                     continue;
                 }
@@ -166,13 +170,13 @@ namespace wfm.geniali.cli.Commands
                     sw.Write(JsonSerializer.Serialize(res.Data));
                 }
 
-                if(_Orders.ContainsKey(inSet.UrlName))
+                if(_Orders.ContainsKey(inSet))
                 {
-                    _Orders[inSet.UrlName] = res.Data;
+                    _Orders[inSet] = res.Data;
                 }
                 else
                 {
-                    _Orders.Add(inSet.UrlName, res.Data);
+                    _Orders.Add(inSet, res.Data);
                 }
             }
 
@@ -184,11 +188,11 @@ namespace wfm.geniali.cli.Commands
             }
         }
 
-        private Dictionary<string, List<Order>> LoadOrders()
+        private Dictionary<ItemsInSet, List<Order>> LoadOrders(List<ItemsInSet> itemsInSet)
         {
             string[] files = Directory.GetFiles("cache\\orders", "*.item.cache.json");
 
-            Dictionary<string, List<Order>> retValue = new Dictionary<string, List<Order>>();
+            Dictionary<ItemsInSet, List<Order>> retValue = new Dictionary<ItemsInSet, List<Order>>();
 
             foreach(string file in files)
             {
@@ -201,7 +205,7 @@ namespace wfm.geniali.cli.Commands
                         string      json = sr.ReadToEnd();
                         List<Order> res  = JsonSerializer.Deserialize<List<Order>>(json);
 
-                        retValue.Add(fi.Name.Replace(".item.cache.json", ""), res);
+                        retValue.Add(itemsInSet.First(i => i.UrlName.Equals(fi.Name.Replace(".item.cache.json", ""), StringComparison.CurrentCultureIgnoreCase)), res);
                     }
                     catch(Exception e)
                     {
@@ -220,15 +224,19 @@ namespace wfm.geniali.cli.Commands
             {
                 Console.Clear();
 
-                Dictionary<string, Order> bestSellOrders = GenerateBestSellOrderList(_Orders);
+                Dictionary<ItemsInSet, Order> bestSellOrders = GenerateBestSellOrderList(_Orders);
 
-                DataGrid dataGrid = new DataGrid($"Preis teuerste Items {DateTime.Now.ToShortTimeString()}");
+                DataGrid dataGrid = new DataGrid($"Preis teuerste Items {DateTime.Now.ToShortTimeString()} "
+                                                 + $"- Items {_Orders.Count} "
+                                                 + $"- Fastdownload Items {_FastDownloadOrders.Count}");
+
                 dataGrid.Columns.Add("Name");
                 dataGrid.Columns.Add("URL Name");
                 dataGrid.Columns.Add("zu kaufen für");
 
                 _FastDownloadOrders.Clear();
-                foreach(KeyValuePair<string, Order> keyValuePair in bestSellOrders.OrderByDescending(i => i.Value.Platinum).Take(_Top * 2))
+
+                foreach(KeyValuePair<ItemsInSet, Order> keyValuePair in bestSellOrders.OrderByDescending(i => i.Value.Platinum).Take(_Top * 2))
                 {
                     _FastDownloadOrders.Add(keyValuePair.Key, new List<Order>()
                                                               {
@@ -236,9 +244,9 @@ namespace wfm.geniali.cli.Commands
                                                               });
                 }
 
-                foreach(KeyValuePair<string, Order> keyValuePair in bestSellOrders.OrderByDescending(i => i.Value.Platinum).Take(_Top))
+                foreach(KeyValuePair<ItemsInSet, Order> keyValuePair in bestSellOrders.OrderByDescending(i => i.Value.Platinum).Take(_Top))
                 {
-                    dataGrid.Rows.Add(itemsInSet.First(i => i.UrlName == keyValuePair.Key).En.ItemName, keyValuePair.Key,
+                    dataGrid.Rows.Add(itemsInSet.First(i => i == keyValuePair.Key).En.ItemName, keyValuePair.Key.UrlName,
                                       keyValuePair.Value.Platinum);
                 }
 
@@ -247,18 +255,18 @@ namespace wfm.geniali.cli.Commands
                 _Timer.Interval = _UpdateIntervall * 1000;
             };
 
-            _Timer.Interval = 2500;
+            _Timer.Interval  = 2500;
             _Timer.Enabled   = true;
             _Timer.AutoReset = true;
         }
 
-        private Dictionary<string, Order> GenerateBestSellOrderList(Dictionary<string, List<Order>> orders)
+        private Dictionary<ItemsInSet, Order> GenerateBestSellOrderList(Dictionary<ItemsInSet, List<Order>> orders)
         {
-            Dictionary<string, Order> retValue = new Dictionary<string, Order>();
+            Dictionary<ItemsInSet, Order> retValue = new Dictionary<ItemsInSet, Order>();
 
             for(int i = 0; i < orders.Count; i++)
             {
-                KeyValuePair<string, List<Order>> item = orders.ElementAt(i);
+                KeyValuePair<ItemsInSet, List<Order>> item = orders.ElementAt(i);
 
                 try
                 {

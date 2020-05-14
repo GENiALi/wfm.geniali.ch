@@ -20,18 +20,17 @@ namespace wfm.geniali.rest
             set;
         }
 
-        public IRestClient _Client
-        {
-            get;
-            set;
-        }
+        // public IRestClient _Client
+        // {
+        //     get;
+        //     set;
+        // }
 
         public WfmClient()
         {
             _BaseUrl = "https://api.warframe.market/v1";
 
-            _Client = new RestClient(_BaseUrl);
-            _Client.UseSystemTextJson();
+            
         }
 
         public async Task<Result<List<ShortItem>>> GetShortItemsAsync()
@@ -89,8 +88,11 @@ namespace wfm.geniali.rest
         {
             request.AddHeader("language", "en");
             request.AddHeader("platfrom", "pc");
+
+            RestClient client = new RestClient(_BaseUrl);
+            client.UseSystemTextJson();
             
-            IRestResponse<T> response = await _Client.ExecuteAsync<T>(request);
+            IRestResponse<T> response = await client.ExecuteAsync<T>(request);
 
             if(response.ErrorException != null)
             {

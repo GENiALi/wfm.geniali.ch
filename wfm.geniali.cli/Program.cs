@@ -85,6 +85,11 @@ namespace wfm.geniali.cli
                         new Continuously().Execute(this, client);
 
                         break;
+                    case "set":
+                    case "s":
+                        new PrimeSet().Execute(this, client);
+
+                        break;
                     default:
                         continue;
                 }
@@ -98,6 +103,7 @@ namespace wfm.geniali.cli
             CWL("h | help \t für Hilfe");
             CWL("e | exit \t für beenden");
             CWL("l | list \t für Listenmodus");
+            CWL("s | set \t für Prime Set Modus");
             CWL("c | continuously \t für permanente Updates");
         }
 
