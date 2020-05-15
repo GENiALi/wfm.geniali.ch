@@ -34,6 +34,7 @@ namespace wfm.geniali.cli
 
         private static void Main(string[] args)
         {
+            Console.SetWindowSize(180, 50);
             new Program().Run(args);
         }
 

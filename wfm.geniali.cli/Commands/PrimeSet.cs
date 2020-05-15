@@ -1,13 +1,16 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
-
+using System.Threading.Tasks;
 
 using DustInTheWind.ConsoleTools.TabularData;
 
+using wfm.geniali.cli.Lib;
 using wfm.geniali.lib.Classes.Item;
 using wfm.geniali.lib.Classes.Order;
 using wfm.geniali.rest;
@@ -20,8 +23,13 @@ namespace wfm.geniali.cli.Commands
         private int _UpdateIntervall = 30;
         private bool _Stop = false;
         private Timer _Timer = null;
-        private Dictionary<ItemsInSet, List<Order>> _Orders = new Dictionary<ItemsInSet, List<Order>>();
-        private Dictionary<ItemsInSet, List<Order>> _FastDownloadOrders = new Dictionary<ItemsInSet, List<Order>>();
+        private ConcurrentDictionary<ItemsInSet, List<Order>> _Orders = new ConcurrentDictionary<ItemsInSet, List<Order>>();
+        private ConcurrentDictionary<ItemsInSet, List<Order>> _FastDownloadOrders = new ConcurrentDictionary<ItemsInSet, List<Order>>();
+        private BlockingCollection<ItemsInSet> _ItemsInSet = new BlockingCollection<ItemsInSet>();
+        private BlockingCollection<ItemsInSet> _ItemIsLoadet = new BlockingCollection<ItemsInSet>();
+        private List<Item> _Items = new List<Item>();
+        private Thread _SlowDownloadThread;
+        private Thread _FastDownloadThread;
 
         public void Execute(Program main, WfmClient client)
         {
@@ -29,11 +37,16 @@ namespace wfm.geniali.cli.Commands
             bool   exit  = false;
             main.CWL("Starte mit laden der Orders");
 
-            List<ItemsInSet> itemsInSet = LoadItemsInSet();
+            _ItemsInSet = LoadItemsInSet();
 
             if(Directory.Exists("cache\\orders") == false)
             {
                 Directory.CreateDirectory("cache\\orders");
+            }
+
+            if(_Orders.Count == 0)
+            {
+                _Orders = LoadOrders(_ItemsInSet);
             }
 
             do
@@ -50,7 +63,8 @@ namespace wfm.geniali.cli.Commands
                     case "b":
                     case "back":
                         Stop();
-                        exit  = true;
+                        exit = true;
+
                         break;
                     case "help":
                     case "h":
@@ -58,8 +72,9 @@ namespace wfm.geniali.cli.Commands
 
                         break;
                     case "ps":
-                        Start(main, client, itemsInSet);
-                        ListPrimeSets(itemsInSet, main, client);
+                        Start(main, client, _ItemsInSet);
+                        GenerateOutput();
+
                         break;
                     case "wfps":
                         break;
@@ -84,23 +99,28 @@ namespace wfm.geniali.cli.Commands
             } while(exit == false);
         }
 
-        private void Start(Program main, WfmClient client, List<ItemsInSet> itemsInSet)
+        private void Start(Program main, WfmClient client, BlockingCollection<ItemsInSet> itemsInSet)
         {
-            Thread t = new Thread(() => InitLoadOrders(itemsInSet, main, client));
-            t.IsBackground = true;
-            t.Start();
 
-            Thread t2 = new Thread(() => InitLoadFastOrders(itemsInSet, main, client));
-            t2.IsBackground = true;
-            t2.Start();
+            _SlowDownloadThread = new Thread(() => InitLoadOrders(itemsInSet, main, client));
+            _SlowDownloadThread.IsBackground = true;
+            _SlowDownloadThread.Start();
+
+
+            _FastDownloadThread = new Thread(() => InitLoadFastOrders(itemsInSet, main, client));
+            _FastDownloadThread.IsBackground = true;
+            _FastDownloadThread.Start();
         }
 
         private void Stop()
         {
             _Stop = true;
             Thread.Sleep(2000);
-            _Orders.Clear();
             _FastDownloadOrders.Clear();
+            _ItemIsLoadet = new BlockingCollection<ItemsInSet>();
+
+            _FastDownloadThread = null;
+            _SlowDownloadThread = null;
 
             if(_Timer != null)
             {
@@ -108,80 +128,160 @@ namespace wfm.geniali.cli.Commands
             }
         }
 
-        private void ListPrimeSets(List<ItemsInSet> itemsInSet, Program main, WfmClient client)
+        private ConcurrentDictionary<ItemsInSet, List<Order>> ListPrimeSets(ConcurrentDictionary<ItemsInSet, List<Order>> orders, List<string> filer)
         {
-            _Orders.Clear();
-            _FastDownloadOrders.Clear();
+            ConcurrentDictionary<ItemsInSet, List<Order>> retValue = new ConcurrentDictionary<ItemsInSet, List<Order>>();
 
-            List<ItemsInSet> listWithTags = GetFiltertListTags(itemsInSet, new List<string>()
-                                                                           {
-                                                                               "prime",
-                                                                               "set"
-                                                                           });
+            List<ItemsInSet> listWithTags = GetFiltertListTags(filer);
 
-            _Orders = GenerateOrdersList(listWithTags, main, client);
+            foreach(KeyValuePair<ItemsInSet, List<Order>> keyValuePair in orders)
+            {
+                if(listWithTags.Contains(keyValuePair.Key))
+                {
+                    retValue.TryAdd(keyValuePair.Key, keyValuePair.Value);
+                }
+            }
 
-            GenerateOutput();
+            return retValue;
         }
 
         private void GenerateOutput()
         {
             _Timer = new Timer((state) =>
             {
-                Console.Clear();
+                ConcurrentDictionary<ItemsInSet, List<Order>> primeSets = ListPrimeSets(_Orders, new List<string>(0)
+                                                                                                 {
+                                                                                                     "set",
+                                                                                                     "prime"
+                                                                                                 });
 
-                Dictionary<ItemsInSet, Order> bestSellOrders = GenerateOrderdList(_Orders);
-                Dictionary<ItemsInSet, Order> bestBuyOrders = GenerateOrderdList(_Orders, "buy", "ingame", "desc");
+                ConcurrentDictionary<ItemsInSet, Order> bestSellOrders = GenerateOrderdList(primeSets, "sell", "ingame", "asc");
+                ConcurrentDictionary<ItemsInSet, Order> bestBuyOrders  = GenerateOrderdList(primeSets, "buy", "ingame", "desc");
 
-                DataGrid dataGrid = new DataGrid($"Preise Sets {DateTime.Now.ToShortTimeString()} "
-                                                 + $"- Items {_Orders.Count} "
-                                                 + $"- Fastdownload Items {_FastDownloadOrders.Count}");
+                ConcurrentDictionary<ItemsInSet, Order> bestSellSingleOrder = GenerateOrderdList(_Orders, "sell", "ingame", "asc");
 
-                dataGrid.Columns.Add("Name");
-                dataGrid.Columns.Add("URL Name");
-                dataGrid.Columns.Add("zu kaufen für");
-                dataGrid.Columns.Add("zu verkaufen für");
-
-                _FastDownloadOrders.Clear();
-
-                foreach(KeyValuePair<ItemsInSet, Order> keyValuePair in bestSellOrders.OrderByDescending(i => i.Value.Platinum).Take(_Top * 2))
-                {
-                    _FastDownloadOrders.Add(keyValuePair.Key, new List<Order>()
-                                                              {
-                                                                  keyValuePair.Value
-                                                              });
-                }
-
+                List<PrimeSetDr> records = new List<PrimeSetDr>();
                 foreach(KeyValuePair<ItemsInSet, Order> keyValuePair in bestSellOrders.OrderByDescending(i => i.Value.Platinum).Take(_Top))
                 {
-                    float sell = keyValuePair.Value.Platinum;
-                    float buy = bestBuyOrders[keyValuePair.Key].Platinum;
+                    if(_ItemIsLoadet.Any(i => i.Id == keyValuePair.Key.Id) == false)
+                    {
+                        Item itemForSet = LoadItemsForSet(keyValuePair.Key.UrlName);
+                        _Items.Add(itemForSet);
+                        AddToFastLoad(itemForSet);
+                        _ItemIsLoadet.TryAdd(keyValuePair.Key);
+                    }
+
+                    float totalKaufen = 0f;
+
+                    List<KeyValuePair<ItemsInSet, Order>> set = new List<KeyValuePair<ItemsInSet, Order>>();
+
+                    if(_Items.Any(i => i.Id == keyValuePair.Key.Id))
+                    {
+                        foreach(ItemsInSet setItem in _Items.First(i => i.Id == keyValuePair.Key.Id).ItemsInSet.Where(i => i.SetRoot == false))
+                        {
+                            set.Add(bestSellSingleOrder.First(i => i.Key.Id == setItem.Id));
+                        }
+
+                        totalKaufen = set.Sum(i => i.Value.Platinum);
+                    }
+
+                    float sell   = keyValuePair.Value.Platinum;
+                    float buy    = bestBuyOrders[keyValuePair.Key].Platinum;
+
                     string suffix = "";
 
                     if(buy > sell)
                     {
                         suffix = "+ ";
 
-                        if((100 - (sell / buy)) > 20)
+                        if((sell / buy) <= 0.9)
                         {
-                            suffix = "++ ";
+                            suffix = $"++ ";
                         }
                     }
-                    
-                    dataGrid.Rows.Add(keyValuePair.Key.En.ItemName
-                                    , keyValuePair.Key.UrlName
-                                    , $"{sell} ({keyValuePair.Value.User.IngameName} {keyValuePair.Value.User.Region})"
-                                    , $"{suffix}{buy} ({bestBuyOrders[keyValuePair.Key].User.IngameName} {bestBuyOrders[keyValuePair.Key].User.Region})");
+                        PrimeSetDr record = new PrimeSetDr();
+                        record.Name = $"{(suffix.Length > 0 ? "* " : "")}{keyValuePair.Key.En.ItemName}";
+                        record.UrlName = keyValuePair.Key.UrlName;
+                        record.SellText = $"{sell} ({keyValuePair.Value.User.IngameName} {keyValuePair.Value.User.Region})";
+                        record.Sell = sell;
+                        record.BuyText = $"{suffix}{buy} ({bestBuyOrders[keyValuePair.Key].User.IngameName} {bestBuyOrders[keyValuePair.Key].User.Region})";
+                        record.Buy = buy;
+                        record.TotalKauf = totalKaufen;
+                        record.Gewinn = sell - totalKaufen;
+                        record.GewinnText = $"{sell - totalKaufen} ({buy - totalKaufen})";
+                        record.SetItems = GenerateItemList(set);
+                        
+                        records.Add(record);
                 }
 
-                dataGrid.Display();
                 
+
+                DataGrid dataGrid = new DataGrid($"Preise Sets {DateTime.Now.ToShortTimeString()} "
+                                                 + $"- Items {_Orders.Count} "
+                                                 + $"- Fastdownload Items {_FastDownloadOrders.Count()}");
+
+                dataGrid.Columns.Add("Name");
+                dataGrid.Columns.Add("URL Name");
+                dataGrid.Columns.Add("zu kaufen für");
+                dataGrid.Columns.Add("zu verkaufen für");
+                dataGrid.Columns.Add("total kaufen");
+                dataGrid.Columns.Add("+-/ Gewinn");
+                dataGrid.Columns.Add("Items");
+                foreach(PrimeSetDr dr in records.OrderByDescending(i => i.Gewinn))
+                {
+                    dataGrid.Rows.Add(dr.Name, dr.UrlName, dr.SellText, dr.BuyText, dr.TotalKauf.ToString(), dr.GewinnText, dr.SetItems);
+                }
+
+                Console.Clear();
+                dataGrid.Display();
             }, null, TimeSpan.Zero, TimeSpan.FromSeconds(_UpdateIntervall));
         }
 
-        private Dictionary<ItemsInSet, Order> GenerateOrderdList(Dictionary<ItemsInSet, List<Order>> orders, string orderType = "sell", string status = "ingame", string sortType = "asc")
+        private string GenerateItemList(List<KeyValuePair<ItemsInSet, Order>> set)
         {
-            Dictionary<ItemsInSet, Order> retValue = new Dictionary<ItemsInSet, Order>();
+            StringBuilder sb = new StringBuilder();
+
+            foreach(KeyValuePair<ItemsInSet, Order> keyValuePair in set)
+            {
+                string[] bez = keyValuePair.Key.En.ItemName.Split(' ');
+                sb.Append($"{bez[bez.Length - 1]} ({keyValuePair.Value.Platinum}) ");
+            }
+
+            return sb.ToString();
+        }
+
+        private void AddToFastLoad(Item itemForSet)
+        {
+            foreach(ItemsInSet itemsInSet in itemForSet.ItemsInSet)
+            {
+                if(_FastDownloadOrders.Any(i => i.Key.Id == itemsInSet.Id) == false)
+                {
+                    _FastDownloadOrders.TryAdd(itemsInSet, _Orders.First(i => i.Key.Id == itemsInSet.Id).Value);
+                }
+            }
+        }
+
+        private Item LoadItemsForSet(string urlName)
+        {
+            FileInfo itemFi = new FileInfo($"cache/{urlName}.item.cache.json");
+
+            if(itemFi.Exists)
+            {
+                using(StreamReader sr = new StreamReader(itemFi.FullName))
+                {
+                    string json = sr.ReadToEnd();
+
+                    return JsonSerializer.Deserialize<ItemRoot>(json).Payload.Item;
+                }
+            }
+
+            return null;
+        }
+
+        private ConcurrentDictionary<ItemsInSet, Order> GenerateOrderdList(ConcurrentDictionary<ItemsInSet, List<Order>> orders, string orderType = "sell", string status = "ingame",
+                                                                           string sortType = "asc")
+        {
+            ConcurrentDictionary<ItemsInSet, Order> retValue = new ConcurrentDictionary<ItemsInSet, Order>();
 
             for(int i = 0; i < orders.Count; i++)
             {
@@ -191,7 +291,7 @@ namespace wfm.geniali.cli.Commands
                 {
                     if(item.Value != null)
                     {
-                        List<Order> orderList = item.Value.Where(i => i.OrderType.Equals(orderType) 
+                        List<Order> orderList = item.Value.Where(i => i.OrderType.Equals(orderType)
                                                                       && i.User.Status.Equals(status))
                                                     .ToList();
 
@@ -200,11 +300,11 @@ namespace wfm.geniali.cli.Commands
                         {
                             if(sortType.Equals("asc", StringComparison.CurrentCultureIgnoreCase))
                             {
-                                retValue.Add(item.Key, orderList.OrderBy(i => i.Platinum).First());
+                                retValue.TryAdd(item.Key, orderList.OrderBy(i => i.Platinum).First());
                             }
                             else
                             {
-                                retValue.Add(item.Key, orderList.OrderByDescending(i => i.Platinum).First());
+                                retValue.TryAdd(item.Key, orderList.OrderByDescending(i => i.Platinum).First());
                             }
                         }
                     }
@@ -217,40 +317,11 @@ namespace wfm.geniali.cli.Commands
             return retValue;
         }
 
-        private Dictionary<ItemsInSet, List<Order>> GenerateOrdersList(List<ItemsInSet> listWithTags, Program main, WfmClient client)
-        {
-            Dictionary<ItemsInSet, List<Order>> retValue = new Dictionary<ItemsInSet, List<Order>>();
-
-            foreach(ItemsInSet itemInSet in listWithTags)
-            {
-                FileInfo fi = new FileInfo($"cache\\orders\\{itemInSet.UrlName}.item.cache.json");
-
-                if(fi.Exists)
-                {
-                    using(StreamReader sr = new StreamReader(fi.FullName))
-                    {
-                        try
-                        {
-                            string      json = sr.ReadToEnd();
-                            List<Order> res  = JsonSerializer.Deserialize<List<Order>>(json);
-
-                            retValue.Add(itemInSet, res);
-                        }
-                        catch(Exception e)
-                        {
-                        }
-                    }
-                }
-            }
-
-            return retValue;
-        }
-
-        private List<ItemsInSet> GetFiltertListTags(List<ItemsInSet> itemsInSet, List<string> list)
+        private List<ItemsInSet> GetFiltertListTags(List<string> list)
         {
             List<ItemsInSet> retValue = new List<ItemsInSet>();
 
-            foreach(ItemsInSet inSet in itemsInSet)
+            foreach(ItemsInSet inSet in _ItemsInSet)
             {
                 bool contain = true;
 
@@ -273,7 +344,7 @@ namespace wfm.geniali.cli.Commands
             return retValue;
         }
 
-        private List<ItemsInSet> LoadItemsInSet()
+        private BlockingCollection<ItemsInSet> LoadItemsInSet()
         {
             FileInfo itemsInSetFi = new FileInfo($"cache/items.in.set.cache.json");
 
@@ -281,11 +352,13 @@ namespace wfm.geniali.cli.Commands
             {
                 string json = sr.ReadToEnd();
 
-                return JsonSerializer.Deserialize<List<ItemsInSet>>(json);
+                List<ItemsInSet> retValue = JsonSerializer.Deserialize<List<ItemsInSet>>(json);
+
+                return new BlockingCollection<ItemsInSet>(new ConcurrentQueue<ItemsInSet>(retValue));
             }
         }
 
-        private void InitLoadOrders(List<ItemsInSet> itemsInSet, Program main, WfmClient client)
+        private void InitLoadOrders(BlockingCollection<ItemsInSet> itemsInSet, Program main, WfmClient client)
         {
             foreach(ItemsInSet inSet in itemsInSet)
             {
@@ -320,7 +393,7 @@ namespace wfm.geniali.cli.Commands
                 }
                 else
                 {
-                    _Orders.Add(inSet, res.Data);
+                    _Orders.TryAdd(inSet, res.Data);
                 }
             }
 
@@ -332,25 +405,30 @@ namespace wfm.geniali.cli.Commands
             }
         }
 
-        private void InitLoadFastOrders(List<ItemsInSet> itemsInSet, Program main, WfmClient client)
+        private void InitLoadFastOrders(BlockingCollection<ItemsInSet> itemsInSet, Program main, WfmClient client)
         {
-            foreach(ItemsInSet inSet in itemsInSet)
+            ParallelOptions options = new ParallelOptions()
+                                      {
+                                          MaxDegreeOfParallelism = 8
+                                      };
+
+            Parallel.ForEach(itemsInSet, options, (inSet) =>
             {
-                if(_FastDownloadOrders.ContainsKey(inSet) == false)
+                if(_FastDownloadOrders.Any(i => i.Key.Id == inSet.Id) == false)
                 {
-                    continue;
+                    return;
                 }
 
                 if(_Stop)
                 {
-                    break;
+                    return;
                 }
 
                 Result<List<Order>> res = client.GetOrdersAsync(inSet.UrlName)?.Result;
 
                 if(res == null)
                 {
-                    continue;
+                    return;
                 }
 
                 FileInfo orderFi = new FileInfo($"cache\\orders\\{inSet.UrlName}.item.cache.json");
@@ -366,9 +444,45 @@ namespace wfm.geniali.cli.Commands
                 }
                 else
                 {
-                    _Orders.Add(inSet, res.Data);
+                    _Orders.TryAdd(inSet, res.Data);
                 }
-            }
+            });
+                
+            // foreach(ItemsInSet inSet in itemsInSet)
+            // {
+            //     if(_FastDownloadOrders.Any(i => i.Key.Id == inSet.Id) == false)
+            //     {
+            //         continue;
+            //     }
+            //
+            //     if(_Stop)
+            //     {
+            //         break;
+            //     }
+            //
+            //     Result<List<Order>> res = client.GetOrdersAsync(inSet.UrlName)?.Result;
+            //
+            //     if(res == null)
+            //     {
+            //         continue;
+            //     }
+            //
+            //     FileInfo orderFi = new FileInfo($"cache\\orders\\{inSet.UrlName}.item.cache.json");
+            //
+            //     using(StreamWriter sw = new StreamWriter(orderFi.FullName))
+            //     {
+            //         sw.Write(JsonSerializer.Serialize(res.Data));
+            //     }
+            //
+            //     if(_Orders.ContainsKey(inSet))
+            //     {
+            //         _Orders[inSet] = res.Data;
+            //     }
+            //     else
+            //     {
+            //         _Orders.TryAdd(inSet, res.Data);
+            //     }
+            // }
 
             if(_FastDownloadOrders.Count == 0)
             {
@@ -381,11 +495,11 @@ namespace wfm.geniali.cli.Commands
             }
         }
 
-        private Dictionary<ItemsInSet, List<Order>> LoadOrders(List<ItemsInSet> itemsInSet)
+        private ConcurrentDictionary<ItemsInSet, List<Order>> LoadOrders(BlockingCollection<ItemsInSet> itemsInSet)
         {
             string[] files = Directory.GetFiles("cache\\orders", "*.item.cache.json");
 
-            Dictionary<ItemsInSet, List<Order>> retValue = new Dictionary<ItemsInSet, List<Order>>();
+            ConcurrentDictionary<ItemsInSet, List<Order>> retValue = new ConcurrentDictionary<ItemsInSet, List<Order>>();
 
             foreach(string file in files)
             {
@@ -398,7 +512,7 @@ namespace wfm.geniali.cli.Commands
                         string      json = sr.ReadToEnd();
                         List<Order> res  = JsonSerializer.Deserialize<List<Order>>(json);
 
-                        retValue.Add(itemsInSet.First(i => i.UrlName.Equals(fi.Name.Replace(".item.cache.json", ""), StringComparison.CurrentCultureIgnoreCase)), res);
+                        retValue.TryAdd(itemsInSet.First(i => i.UrlName.Equals(fi.Name.Replace(".item.cache.json", ""), StringComparison.CurrentCultureIgnoreCase)), res);
                     }
                     catch(Exception e)
                     {
